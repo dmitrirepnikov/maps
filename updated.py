@@ -230,21 +230,50 @@ def create_map(hour, day_offset):
             ).add_to(m)
 
     # Add legend
-    legend_html = """
-        <div style="
-            width: 100%;
-            background-color: white;
-            padding: 10px;
-            border-top: 2px solid grey;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            z-index: 9999;
-            ">
+    def create_map(hour, day_offset):
+    # Get data using cached function
+    data = fetch_data(hour, day_offset)
+    
+    # [... rest of your existing code ...]
+
+    # Add hotspot squares
+    for idx, row in data.iterrows():
+        if pd.notna(row['hotspot_label']):
+            bounds = get_square_bounds(row['latitude'], row['longitude'], 400)
+            popup_content = f"""
+            <b>Hotspot {row['hotspot_label']}</b><br>
+            Predicted Demand: {row['predicted_demand']:.2f}<br>
+            Actual Offers: {row['num_offers']}<br>
+            Supply Hours: {row['net_supply_hours']:.2f}<br>
+            Status: {row['status']}
+            """
+            folium.Rectangle(
+                bounds=bounds,
+                color='black',
+                weight=1,
+                fill=True,
+                fillColor=color_scheme[row['status']],
+                fillOpacity=0.6,
+                popup=popup_content
+            ).add_to(m)
+
+    # Add legend
+    legend_html = f"""
+    <div class='legend' 
+         style='position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 20px;
+                background-color: white;
+                padding: 10px 20px;
+                border: 2px solid grey;
+                border-radius: 6px;
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                z-index: 9999;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                '>
     """
 
     for status, color in color_scheme.items():
@@ -252,18 +281,22 @@ def create_map(hour, day_offset):
             <div style="display: flex; align-items: center;">
                 <div style="
                     background-color: {color}; 
-                    width: 20px; 
-                    height: 20px; 
+                    width: 15px; 
+                    height: 15px; 
                     margin-right: 5px;
-                    border: 1px solid black;
-                    ">
+                    border: 1px solid black;">
                 </div>
-                <div>{status}</div>
+                <span style="font-size: 12px;">{status}</span>
             </div>
         """
 
     legend_html += "</div>"
-    m.get_root().html.add_child(folium.Element(legend_html))
+
+    # Add legend with macro
+    legend_macro = folium.MacroElement()
+    legend_macro._name = 'legend'
+    legend_macro.template = folium.Element(legend_html)
+    m.get_root().add_child(legend_macro)
 
     return m
 
