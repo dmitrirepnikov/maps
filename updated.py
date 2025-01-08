@@ -229,34 +229,29 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-    # Add legend
-    legend_html = """
-        <div style="position: fixed; 
-                    bottom: 50px; right: 50px; 
-                    border:2px solid grey; z-index: 1000;
-                    background-color: white;
-                    padding: 10px;
-                    opacity: 0.8;
-                    border-radius: 6px;
-                    ">
-        <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Legend</div>
-    """
-    
-    for status, color in color_scheme.items():
-        legend_html += f"""
-            <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                <div style="background-color: {color}; 
-                            width: 20px; 
-                            height: 20px; 
-                            margin-right: 5px;
-                            border: 1px solid black;">
-                </div>
-                <div>{status}</div>
-            </div>
-        """
-    
-    legend_html += "</div>"
-    m.get_root().html.add_child(folium.Element(legend_html))
+# Add legend
+legend_html = """
+    <div style="position: fixed; 
+                bottom: 50px; left: 50px;  # Changed from right to left
+                border:2px solid grey; z-index: 9999;  # Increased z-index
+                background-color: white;
+                padding: 10px;
+                opacity: 0.9;  # Increased opacity slightly
+                border-radius: 6px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);  # Added shadow for better visibility
+                ">
+    <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Legend</div>
+"""
+
+# Keep the rest of the legend code the same, but add it to the map differently:
+m.get_root().html.add_child(folium.Element(legend_html))
+m.get_root().html.add_child(folium.Element("""
+    <style>
+        .leaflet-bottom.leaflet-left {
+            z-index: 1000;
+        }
+    </style>
+"""))
 
     return m
 
