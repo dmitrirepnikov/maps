@@ -273,21 +273,23 @@ def main():
     if m is not None:
         st_folium(m, width=1400, height=600)
         
-        # Add standalone legend below map
-        # Add standalone legend below map
         st.markdown("""
             <style>
             .legend-container {
                 text-align: center;
-                padding: 10px;
+                padding: 12px;
                 background-color: rgba(255, 255, 255, 0.9);
-                border-radius: 5px;
-                margin-top: 10px;
+                margin-top: -20px;  /* Move closer to map */
+                width: 100%;
+                border-radius: 2px;
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
             }
             .legend-item {
                 display: inline-flex;
                 align-items: center;
-                margin: 0 15px;
+                margin: 0 20px;
+                color: black;
+                font-family: system-ui;
             }
             .color-box {
                 width: 20px;
@@ -298,22 +300,21 @@ def main():
             </style>
         """, unsafe_allow_html=True)
 
-        legend_col1, legend_col2, legend_col3 = st.columns([1,3,1])
-        with legend_col2:
-            legend_items = "".join([
-                f"""
-                <div class="legend-item">
-                    <div class="color-box" style="background-color: {color}"></div>
-                    <span>{status}</span>
-                </div>
-                """ for status, color in color_scheme.items()
-            ])
-            
-            st.markdown(f"""
-                <div class="legend-container">
-                    {legend_items}
-                </div>
-            """, unsafe_allow_html=True)
+        # Remove the columns to make legend full width
+        legend_items = "".join([
+            f"""
+            <div class="legend-item">
+                <div class="color-box" style="background-color: {color}"></div>
+                <span>{status}</span>
+            </div>
+            """ for status, color in color_scheme.items()
+        ])
+        
+        st.markdown(f"""
+            <div class="legend-container">
+                {legend_items}
+            </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
