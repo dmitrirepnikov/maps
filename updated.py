@@ -2,7 +2,7 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from google.cloud import bigquery
-import google.oauth2.credentials  # Add this line
+import google.oauth2.credentials
 from datetime import datetime, timedelta
 import pytz
 from math import sqrt
@@ -14,15 +14,19 @@ st.set_page_config(page_title="Supply-Demand Distribution", layout="wide")
 # Initialize BigQuery client
 @st.cache_resource
 def get_bq_client():
-    credentials_dict = st.secrets["gcp_service_account"]
-    credentials = google.oauth2.credentials.Credentials(
-        None,
-        refresh_token=credentials_dict['refresh_token'],
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=credentials_dict['client_id'],
-        client_secret=credentials_dict['client_secret']
-    )
-    return bigquery.Client(project='postmates-x', credentials=credentials)
+    try:
+        credentials_dict = st.secrets["gcp_service_account"]
+        credentials = google.oauth2.credentials.Credentials(
+            None,
+            refresh_token=credentials_dict['refresh_token'],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=credentials_dict['client_id'],
+            client_secret=credentials_dict['client_secret']
+        )
+        return bigquery.Client(project='postmates-x', credentials=credentials)
+    except Exception as e:
+        st.error(f"Error initializing BigQuery client: {str(e)}")
+        raise
 
 bq = get_bq_client()
 
@@ -113,7 +117,7 @@ def fetch_data(hour, day_offset):
           h.label as location
         FROM filtered_rover_state r
         CROSS JOIN hotspots h
-        WHERE ST_DISTANCE(h.hotspot_location, ST_GEOGPOINT(r.geo_pose_longitude, r.geo_pose_latitude)) <= 420
+        WHERE ST_DISTANCE(h.hotspot_location, ST_GEOGPOINT(r.geo_pose_longitude, r.geo_pose_latitude)) <= 430
         GROUP BY 1, 2, 3, 4, 5
       ),
 
@@ -225,14 +229,15 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-    # Add legend directly to the map
+    # Add legend
     legend_html = """
         <div style="position: fixed; 
-                    bottom: 50px; right: 10px; 
+                    bottom: 50px; right: 50px; 
                     border:2px solid grey; z-index: 1000;
                     background-color: white;
                     padding: 10px;
                     opacity: 0.8;
+                    border-radius: 6px;
                     ">
         <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Legend</div>
     """
@@ -256,7 +261,12 @@ def create_map(hour, day_offset):
     return m
 
 def main():
-    st.title("Hotspot Demand Map")
+    st.title("Supply-Demand Distribution")
+    
+    # Get current time in PST
+    pst = pytz.timezone('America/Los_Angeles')
+    current_time = datetime.now(pst)
+    current_hour = current_time.hour
     
     # Create two columns for the controls
     col1, col2 = st.columns(2)
@@ -265,30 +275,32 @@ def main():
         day_option = st.selectbox(
             "Select Day",
             options=["Today", "Yesterday"],
-            index=0,
+            index=1 if current_hour == 0 else 0,  # Default to Yesterday if it's midnight
             key="day_select"
         )
         day_offset = 0 if day_option == "Today" else -1
         
     with col2:
+        # Calculate max hour based on current time
+        max_hour = current_hour - 1 if day_offset == 0 else 23
+        
         hour = st.slider(
             "Select Hour (24h)",
             min_value=0,
-            max_value=23,
-            value=18,
+            max_value=max_hour,
+            value=max_hour,  # Default to latest available hour
             key="hour_select"
         )
     
     # Display current selection
-    pst = pytz.timezone('America/Los_Angeles')
-    current_time = datetime.now(pst)
     selected_date = current_time.date() + timedelta(days=day_offset)
     display_time = datetime.combine(selected_date, datetime.min.time().replace(hour=hour))
     st.write(f"Showing Data for: {display_time.strftime('%Y-%m-%d %H:00')} - {(display_time + timedelta(hours=1)).strftime('%H:00')}")
     
     # Create and display map
     m = create_map(hour, day_offset)
-    st_folium(m, width=1400, height=600)
+    if m is not None:
+        st_folium(m, width=1400, height=600)
 
 if __name__ == "__main__":
     main()
