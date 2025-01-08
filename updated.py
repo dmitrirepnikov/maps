@@ -229,41 +229,41 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-            # Add legend
-legend_html = """
-    <div style="
-        width: 100%;
-        background-color: white;
-        padding: 10px;
-        border-top: 2px solid grey;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 20px;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        z-index: 9999;
-        ">
-"""
-
-for status, color in color_scheme.items():
-    legend_html += f"""
-        <div style="display: flex; align-items: center;">
-            <div style="
-                background-color: {color}; 
-                width: 20px; 
-                height: 20px; 
-                margin-right: 5px;
-                border: 1px solid black;
-                ">
-            </div>
-            <div>{status}</div>
-        </div>
+    # Add legend
+    legend_html = """
+        <div style="
+            width: 100%;
+            background-color: white;
+            padding: 10px;
+            border-top: 2px solid grey;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            z-index: 9999;
+            ">
     """
 
-legend_html += "</div>"
-m.get_root().html.add_child(folium.Element(legend_html))
+    for status, color in color_scheme.items():
+        legend_html += f"""
+            <div style="display: flex; align-items: center;">
+                <div style="
+                    background-color: {color}; 
+                    width: 20px; 
+                    height: 20px; 
+                    margin-right: 5px;
+                    border: 1px solid black;
+                    ">
+                </div>
+                <div>{status}</div>
+            </div>
+        """
+
+    legend_html += "</div>"
+    m.get_root().html.add_child(folium.Element(legend_html))
 
     return m
 
