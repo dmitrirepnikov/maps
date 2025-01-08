@@ -229,49 +229,7 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-    # Add legend
-    from branca.element import Figure, MacroElement, Template
-
-    class Legend(MacroElement):
-        def __init__(self, colors, labels):
-            super(Legend, self).__init__()
-            self.colors = colors
-            self.labels = labels
-
-        def render(self, **kwargs):
-            return Template("""
-                {% macro html(this, kwargs) %}
-                <div style="position: fixed; 
-                            bottom: 50px; 
-                            left: 50px; 
-                            background-color: white;
-                            padding: 10px;
-                            border: 2px solid grey;
-                            z-index: 9999;
-                            border-radius: 5px;">
-                    {% for color, label in this.colors %}
-                    <div style="margin-bottom: 5px;">
-                        <span style="background-color: {{ color }}; 
-                                border: 1px solid black;
-                                width: 12px; 
-                                height: 12px; 
-                                display: inline-block;
-                                margin-right: 5px;"></span>
-                        <span>{{ label }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endmacro %}
-            """)
-
-    # Add the legend to the map
-    legend = Legend(
-        colors=[(color_scheme[status], status) for status in color_scheme.keys()],
-        labels=None
-    )
-    m.add_child(legend)
-
-    return m
+    return m, color_scheme  # Return both map and color scheme
 
 def main():
     st.title("Supply-Demand Distribution")
@@ -311,9 +269,41 @@ def main():
     st.write(f"Showing Data for: {display_time.strftime('%Y-%m-%d %H:00')} - {(display_time + timedelta(hours=1)).strftime('%H:00')}")
     
     # Create and display map
-    m = create_map(hour, day_offset)
+    m, color_scheme = create_map(hour, day_offset)
     if m is not None:
         st_folium(m, width=1400, height=600)
+        
+        # Add standalone legend below map
+        st.markdown("""
+            <style>
+            .legend-item {
+                display: inline-block;
+                margin-right: 20px;
+            }
+            .color-box {
+                display: inline-block;
+                width: 15px;
+                height: 15px;
+                margin-right: 5px;
+                border: 1px solid black;
+                vertical-align: middle;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        legend_col1, legend_col2, legend_col3 = st.columns([1,3,1])
+        with legend_col2:
+            st.write("---")  # Add a separator line
+            legend_html = "<div style='text-align: center;'>"
+            for status, color in color_scheme.items():
+                legend_html += f"""
+                    <div class='legend-item'>
+                        <span class='color-box' style='background-color: {color}'></span>
+                        <span>{status}</span>
+                    </div>
+                """
+            legend_html += "</div>"
+            st.markdown(legend_html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
