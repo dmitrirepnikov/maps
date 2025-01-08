@@ -6,3 +6,4 @@ folium
 pytz
 pandas
 db-dtypes
+branca
