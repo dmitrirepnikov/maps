@@ -279,11 +279,19 @@ def main():
        # Calculate max hour based on current time
        max_hour = current_hour - 1 if day_offset == 0 else 23
        
+       # Handle case where max_hour would be negative or 0
+       if max_hour <= 0 and day_offset == 0:
+           st.write("No data available yet for today. Please select yesterday.")
+           max_hour = 23
+           # Force selection of yesterday
+           day_option = "Yesterday"
+           day_offset = -1
+       
        hour = st.slider(
            "Select Hour (24h)",
            min_value=0,
            max_value=max_hour,
-           value=max_hour,  # Default to latest available hour
+           value=min(max_hour, 18),  # Default to 6PM or latest available hour
            key="hour_select"
        )
    
