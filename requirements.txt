@@ -1,6 +1,8 @@
 streamlit
 streamlit-folium
 google-cloud-bigquery
+google-auth-oauthlib
 folium
 pytz
 pandas
+db-dtypes
