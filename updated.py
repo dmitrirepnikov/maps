@@ -265,7 +265,10 @@ def create_map(hour, day_offset):
             """)
 
     # Add the legend to the map
-    legend = Legend([(color, status) for status, color in color_scheme.items()])
+    legend = Legend(
+        colors=[(color_scheme[status], status) for status in color_scheme.keys()],
+        labels=None
+    )
     m.add_child(legend)
 
     return m
