@@ -182,18 +182,43 @@ def fetch_previous_hour_data(hour, day_offset):
    return prev_data
 
 def create_map(hour, day_offset):
-   # Get data using cached function
-   data, refresh_time = fetch_data(hour, day_offset)
-   prev_data = fetch_previous_hour_data(hour, day_offset)
-   
-   # Color scheme
-   color_scheme = {
-       'High Demand No Supply': '#FF0000',  # Bright red
-       'Demand No Supply': '#ff4444',       # Lighter red
-       'Demand With Supply': '#44aa44',     # Green
-       'Supply No Demand': '#4444ff',       # Blue
-       'No Activity': '#888888'             # Gray
-   }
+    # Get data using cached function
+    data, refresh_time = fetch_data(hour, day_offset)
+    prev_data = fetch_previous_hour_data(hour, day_offset)
+    
+    # Check if data is empty or contains all NaN values
+    if data.empty or data['latitude'].isna().all() or data['longitude'].isna().all():
+        st.error("No data available for the selected time period")
+        return None, None, refresh_time
+    
+    # Calculate center coordinates with NaN handling
+    center_lat = data['latitude'].mean(skipna=True)
+    center_lon = data['longitude'].mean(skipna=True)
+    
+    # Additional check for valid center coordinates
+    if pd.isna(center_lat) or pd.isna(center_lon):
+        st.error("Unable to determine map center coordinates")
+        return None, None, refresh_time
+    
+    # Color scheme
+    color_scheme = {
+        'High Demand No Supply': '#FF0000',  # Bright red
+        'Demand No Supply': '#ff4444',       # Lighter red
+        'Demand With Supply': '#44aa44',     # Green
+        'Supply No Demand': '#4444ff',       # Blue
+        'No Activity': '#888888'             # Gray
+    }
+
+    # Create map with default center if needed
+    try:
+        m = folium.Map(location=[center_lat, center_lon],
+                      zoom_start=13,
+                      tiles='cartodbpositron')
+    except ValueError:
+        # Fallback to default LA coordinates if there's an error
+        m = folium.Map(location=[34.0522, -118.2437],  # LA coordinates
+                      zoom_start=13,
+                      tiles='cartodbpositron')
 
    def get_status(row):
        demand = row['predicted_demand']
