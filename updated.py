@@ -229,46 +229,44 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-    # Add legend
-    legend_html = f"""
-    <div class='legend' 
-         style='position: absolute;
-                left: 50%;
-                transform: translateX(-50%);
-                bottom: 20px;
-                background-color: white;
-                padding: 10px 20px;
-                border: 2px solid grey;
-                border-radius: 6px;
-                display: flex;
-                align-items: center;
-                gap: 20px;
-                z-index: 9999;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                '>
-    """
+        # Add legend
+    from branca.element import Figure, MacroElement, Template
 
-    for status, color in color_scheme.items():
-        legend_html += f"""
-            <div style="display: flex; align-items: center;">
-                <div style="
-                    background-color: {color}; 
-                    width: 15px; 
-                    height: 15px; 
-                    margin-right: 5px;
-                    border: 1px solid black;">
+    class Legend(MacroElement):
+        def __init__(self, colors, labels):
+            super(Legend, self).__init__()
+            self.colors = colors
+            self.labels = labels
+
+        def render(self, **kwargs):
+            return Template("""
+                {% macro html(this, kwargs) %}
+                <div style="position: fixed; 
+                            bottom: 50px; 
+                            left: 50px; 
+                            background-color: white;
+                            padding: 10px;
+                            border: 2px solid grey;
+                            z-index: 9999;
+                            border-radius: 5px;">
+                    {% for color, label in this.colors %}
+                    <div style="margin-bottom: 5px;">
+                        <span style="background-color: {{ color }}; 
+                                border: 1px solid black;
+                                width: 12px; 
+                                height: 12px; 
+                                display: inline-block;
+                                margin-right: 5px;"></span>
+                        <span>{{ label }}</span>
+                    </div>
+                    {% endfor %}
                 </div>
-                <span style="font-size: 12px;">{status}</span>
-            </div>
-        """
+                {% endmacro %}
+            """)
 
-    legend_html += "</div>"
-
-    # Add legend with macro
-    legend_macro = folium.MacroElement()
-    legend_macro._name = 'legend'
-    legend_macro.template = folium.Element(legend_html)
-    m.get_root().add_child(legend_macro)
+    # Add the legend to the map
+    legend = Legend([(color, status) for status, color in color_scheme.items()])
+    m.add_child(legend)
 
     return m
 
