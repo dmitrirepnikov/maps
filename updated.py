@@ -191,15 +191,6 @@ def create_map(hour, day_offset):
         st.error("No data available for the selected time period")
         return None, None, refresh_time
     
-    # Calculate center coordinates with NaN handling
-    center_lat = data['latitude'].mean(skipna=True)
-    center_lon = data['longitude'].mean(skipna=True)
-    
-    # Additional check for valid center coordinates
-    if pd.isna(center_lat) or pd.isna(center_lon):
-        st.error("Unable to determine map center coordinates")
-        return None, None, refresh_time
-    
     # Color scheme
     color_scheme = {
         'High Demand No Supply': '#FF0000',  # Bright red
@@ -209,33 +200,22 @@ def create_map(hour, day_offset):
         'No Activity': '#888888'             # Gray
     }
 
-    # Create map with default center if needed
-    try:
-        m = folium.Map(location=[center_lat, center_lon],
-                      zoom_start=13,
-                      tiles='cartodbpositron')
-    except ValueError:
-        # Fallback to default LA coordinates if there's an error
-        m = folium.Map(location=[34.0522, -118.2437],  # LA coordinates
-                      zoom_start=13,
-                      tiles='cartodbpositron')
-
-   def get_status(row):
-       demand = row['predicted_demand']
-       supply = row['net_supply_hours']
-       has_supply = supply > 0.1
-       
-       if demand >= 2 and not has_supply:
-           return 'High Demand No Supply'
-       elif demand > 0 and not has_supply:
-           return 'Demand No Supply'
-       elif demand > 0 and has_supply:
-           if supply > 24:
-               st.warning(f"Warning: Unrealistic supply hours ({supply}) for hotspot {row['hotspot_label']}")
-           return 'Demand With Supply'
-       elif has_supply and demand <= 0:
-           return 'Supply No Demand'
-       return 'No Activity'
+    def get_status(row):
+        demand = row['predicted_demand']
+        supply = row['net_supply_hours']
+        has_supply = supply > 0.1
+        
+        if demand >= 2 and not has_supply:
+            return 'High Demand No Supply'
+        elif demand > 0 and not has_supply:
+            return 'Demand No Supply'
+        elif demand > 0 and has_supply:
+            if supply > 24:
+                st.warning(f"Warning: Unrealistic supply hours ({supply}) for hotspot {row['hotspot_label']}")
+            return 'Demand With Supply'
+        elif has_supply and demand <= 0:
+            return 'Supply No Demand'
+        return 'No Activity'
    
    data['status'] = data.apply(get_status, axis=1)
 
