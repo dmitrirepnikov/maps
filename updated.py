@@ -117,7 +117,7 @@ def fetch_data(hour, day_offset):
           h.label as location
         FROM filtered_rover_state r
         CROSS JOIN hotspots h
-        WHERE ST_DISTANCE(h.hotspot_location, ST_GEOGPOINT(r.geo_pose_longitude, r.geo_pose_latitude)) <= 430
+        WHERE ST_DISTANCE(h.hotspot_location, ST_GEOGPOINT(r.geo_pose_longitude, r.geo_pose_latitude)) <= 420
         GROUP BY 1, 2, 3, 4, 5
       ),
 
@@ -207,34 +207,6 @@ def create_map(hour, day_offset):
     m = folium.Map(location=[center_lat, center_lon],
                   zoom_start=13,
                   tiles='cartodbpositron')
-
-    # Add hotspot squares
-    for idx, row in data.iterrows():
-        if pd.notna(row['hotspot_label']):
-            bounds = get_square_bounds(row['latitude'], row['longitude'], 400)
-            popup_content = f"""
-            <b>Hotspot {row['hotspot_label']}</b><br>
-            Predicted Demand: {row['predicted_demand']:.2f}<br>
-            Actual Offers: {row['num_offers']}<br>
-            Supply Hours: {row['net_supply_hours']:.2f}<br>
-            Status: {row['status']}
-            """
-            folium.Rectangle(
-                bounds=bounds,
-                color='black',
-                weight=1,
-                fill=True,
-                fillColor=color_scheme[row['status']],
-                fillOpacity=0.6,
-                popup=popup_content
-            ).add_to(m)
-
-    # Add legend
-    def create_map(hour, day_offset):
-    # Get data using cached function
-    data = fetch_data(hour, day_offset)
-    
-    # [... rest of your existing code ...]
 
     # Add hotspot squares
     for idx, row in data.iterrows():
