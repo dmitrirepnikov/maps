@@ -331,7 +331,6 @@ def main():
             </div>
         """, unsafe_allow_html=True)
         
-        # Add legend
         st.markdown("""
             <style>
             .legend-container {
@@ -360,20 +359,20 @@ def main():
         """, unsafe_allow_html=True)
 
         # Add legend items
-       legend_items = "".join([
-           f"""
-           <div class="legend-item">
-               <div class="color-box" style="background-color: {color}"></div>
-               <span>{status}</span>
-           </div>
-           """ for status, color in color_scheme.items()
-       ])
-       
-       st.markdown(f"""
-           <div class="legend-container">
-               {legend_items}
-           </div>
-       """, unsafe_allow_html=True)
+        legend_items = "".join([
+            f"""
+            <div class="legend-item">
+                <div class="color-box" style="background-color: {color}"></div>
+                <span>{status}</span>
+            </div>
+            """ for status, color in color_scheme.items()
+        ])
+        
+        st.markdown(f"""
+            <div class="legend-container">
+                {legend_items}
+            </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-   main()
+    main()
