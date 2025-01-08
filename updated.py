@@ -229,7 +229,7 @@ def create_map(hour, day_offset):
                 popup=popup_content
             ).add_to(m)
 
-        # Add legend
+    # Add legend
     from branca.element import Figure, MacroElement, Template
 
     class Legend(MacroElement):
