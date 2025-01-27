@@ -2,9 +2,11 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from google.cloud import bigquery
+from google.oauth2 import service_account
 import pytz
 from datetime import datetime, timedelta
 import branca.colormap as cm
+import json
 
 # Page config
 st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
@@ -12,9 +14,28 @@ st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
 # Initialize BigQuery client
 @st.cache_resource
 def get_bq_client():
-    return bigquery.Client(project='postmates-x')
+    try:
+        # Get credentials from Streamlit secrets
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"]
+        )
+        
+        # Create BigQuery client
+        client = bigquery.Client(
+            project='postmates-x',
+            credentials=credentials
+        )
+        return client
+    except Exception as e:
+        st.error(f"Error initializing BigQuery client: {str(e)}")
+        st.error("Please ensure GCP credentials are properly configured in Streamlit secrets.")
+        raise
 
-bq = get_bq_client()
+try:
+    bq = get_bq_client()
+except Exception as e:
+    st.error("Failed to initialize BigQuery client. Please check your credentials.")
+    st.stop()
 
 @st.cache_data
 def fetch_data(hour):
@@ -74,15 +95,19 @@ def fetch_data(hour):
     AND predicted_demand > 0
     """
     
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("hour", "INTEGER", hour),
-        ]
-    )
-    
-    with st.spinner('Fetching data...'):
-        data = bq.query(query, job_config=job_config).result().to_dataframe()
-    return data
+    try:
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("hour", "INTEGER", hour),
+            ]
+        )
+        
+        with st.spinner('Fetching data...'):
+            data = bq.query(query, job_config=job_config).result().to_dataframe()
+        return data
+    except Exception as e:
+        st.error(f"Error fetching data: {str(e)}")
+        return None
 
 def get_color(demand):
     if demand <= 0.25:
@@ -101,6 +126,10 @@ def get_color(demand):
 def create_map(hour):
     # Get data using cached function
     data = fetch_data(hour)
+    
+    if data is None or data.empty:
+        st.error("No data available for the selected hour.")
+        return None
     
     # Create color scale
     colormap = cm.LinearColormap(
@@ -157,7 +186,8 @@ def main():
     
     # Create and display map
     m = create_map(hour)
-    st_folium(m, width=1400, height=600)
+    if m is not None:
+        st_folium(m, width=1400, height=600)
 
 if __name__ == "__main__":
     main()
