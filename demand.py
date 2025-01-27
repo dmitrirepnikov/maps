@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 import branca.colormap as cm
 import json
 import re
+import pandas as pd
+import base64
+import io
 
 # Page config
 st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
@@ -16,53 +19,37 @@ st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
 @st.cache_resource
 def get_bq_client():
     try:
-        # Get credentials from Streamlit secrets
         credentials_dict = st.secrets["gcp_service_account"]
-        
-        # Create credentials object
         credentials_obj = credentials.Credentials(
-            token=None,  # Token is handled by refresh
+            token=None,
             refresh_token=credentials_dict['refresh_token'],
             token_uri="https://oauth2.googleapis.com/token",
             client_id=credentials_dict['client_id'],
             client_secret=credentials_dict['client_secret']
         )
-        
-        # Create BigQuery client
-        client = bigquery.Client(
-            project='postmates-x',
-            credentials=credentials_obj
-        )
-        return client
-    except KeyError as e:
-        st.error(f"Missing required credential field: {str(e)}")
-        st.error("Please ensure all required fields (refresh_token, client_id, client_secret) are present in secrets.")
-        raise
+        return bigquery.Client(project='postmates-x', credentials=credentials_obj)
     except Exception as e:
         st.error(f"Error initializing BigQuery client: {str(e)}")
-        st.error("Please ensure GCP credentials are properly configured in Streamlit secrets.")
         raise
 
-try:
-    bq = get_bq_client()
-except Exception as e:
-    st.error("Failed to initialize BigQuery client. Please check your credentials.")
-    st.stop()
+def download_link(df, filename, text):
+    """Generate a link to download the DataFrame as CSV"""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
+    return href
 
 def parse_wkt_polygon(wkt_string):
-    # Extract coordinates from WKT POLYGON string
     coords_str = re.search(r'\(\((.*)\)\)', wkt_string).group(1)
     coords_pairs = coords_str.split(',')
     coordinates = []
-    
     for pair in coords_pairs:
         lon, lat = map(float, pair.strip().split())
-        coordinates.append([lat, lon])  # Folium expects [lat, lon]
-    
+        coordinates.append([lat, lon])
     return coordinates
 
 @st.cache_data
-def fetch_data(hour):
+def fetch_data(start_hour, end_hour):
     query = """
     WITH hotspots AS (
       SELECT
@@ -115,14 +102,16 @@ def fetch_data(hour):
     FROM ranked_hotspots h
     LEFT JOIN `serve-robotics.serve_analytics.neighborhoods` n 
       ON ST_CONTAINS(n.polygon, h.hotspot_location)
-    WHERE hr = @hour
+    WHERE hr BETWEEN @start_hour AND @end_hour
     AND predicted_demand > 0
+    ORDER BY hr, label
     """
     
     try:
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("hour", "INTEGER", hour),
+                bigquery.ScalarQueryParameter("start_hour", "INTEGER", start_hour),
+                bigquery.ScalarQueryParameter("end_hour", "INTEGER", end_hour),
             ]
         )
         
@@ -147,20 +136,21 @@ def get_color(demand):
     else:
         return '#FF0000'    # Bright red
 
-def create_map(hour):
-    # Get data using cached function
-    data = fetch_data(hour)
-    
+def create_map(data, hour=None):
     if data is None or data.empty:
-        st.error("No data available for the selected hour.")
+        st.error("No data available for the selected time range.")
         return None
+    
+    # Filter for specific hour if provided
+    if hour is not None:
+        data = data[data['hr'] == hour]
     
     # Create color scale
     colormap = cm.LinearColormap(
         colors=['#00CC00', '#66CC00', '#FFFF00', '#FF9933', '#FF6666', '#FF0000'],
         vmin=0,
         vmax=2.5,
-        caption=f'Eligible Offers (Hour: {hour}:00)',
+        caption='Eligible Offers',
         index=[0, 0.25, 0.5, 0.75, 1, 2]
     )
     
@@ -176,17 +166,15 @@ def create_map(hour):
         color = get_color(row['uber_eligible_offers'])
         
         try:
-            # Parse WKT polygon to coordinates
             coordinates = parse_wkt_polygon(row['square_geometry'])
             
-            # Create polygon
             folium.Polygon(
                 locations=coordinates,
                 color='black',
                 weight=1,
                 fillColor=color,
                 fillOpacity=0.8,
-                tooltip=f"Label: {row['label']}<br>Hour: {hour}:00<br>Eligible Offers: {row['uber_eligible_offers']:.2f}"
+                tooltip=f"Label: {row['label']}<br>Hour: {row['hr']}:00<br>Eligible Offers: {row['uber_eligible_offers']:.2f}"
             ).add_to(m)
         except Exception as e:
             st.warning(f"Error plotting hotspot {row['label']}: {str(e)}")
@@ -198,26 +186,67 @@ def create_map(hour):
     return m
 
 def main():
-    st.title("Hotspot Demand Map (for clusters with > 0 eligible orders")
+    st.title("LA Hotspot Demand Map")
     
-    # Hour selector
-    hour = st.slider(
-        "Select Hour (24h)",
-        min_value=8,
-        max_value=22,
-        value=13,
-        key="hour_select"
-    )
+    # Time range selector
+    col1, col2 = st.columns(2)
+    with col1:
+        start_hour = st.slider(
+            "Start Hour (24h)",
+            min_value=8,
+            max_value=22,
+            value=13,
+            key="start_hour"
+        )
+    with col2:
+        end_hour = st.slider(
+            "End Hour (24h)",
+            min_value=start_hour,
+            max_value=22,
+            value=min(start_hour + 2, 22),
+            key="end_hour"
+        )
     
-    # Display current selection
-    pst = pytz.timezone('America/Los_Angeles')
-    current_time = datetime.now(pst)
-    st.write(f"Showing Data for: {current_time.strftime('%Y-%m-%d')} {hour}:00 - {hour+1}:00")
+    # Fetch data for the entire range
+    data = fetch_data(start_hour, end_hour)
     
-    # Create and display map
-    m = create_map(hour)
-    if m is not None:
-        st_folium(m, width=1400, height=600)
+    if data is not None and not data.empty:
+        # Display current selection
+        pst = pytz.timezone('America/Los_Angeles')
+        current_time = datetime.now(pst)
+        st.write(f"Showing Data for: {current_time.strftime('%Y-%m-%d')} {start_hour}:00 - {end_hour}:00")
+        
+        # Add export button
+        st.markdown(download_link(data, 
+                                f"hotspot_data_{start_hour}-{end_hour}.csv", 
+                                "📥 Download Data as CSV"), 
+                   unsafe_allow_html=True)
+        
+        # Display summary statistics
+        st.subheader("Summary Statistics")
+        total_offers = data['uber_eligible_offers'].sum()
+        avg_offers = data['uber_eligible_offers'].mean()
+        st.write(f"Total Eligible Offers: {total_offers:.1f}")
+        st.write(f"Average Offers per Hotspot: {avg_offers:.1f}")
+        
+        # Hour selector for map view
+        selected_hour = st.slider(
+            "Select Hour to View on Map",
+            min_value=start_hour,
+            max_value=end_hour,
+            value=start_hour,
+            key="map_hour"
+        )
+        
+        # Create and display map for selected hour
+        m = create_map(data, selected_hour)
+        if m is not None:
+            st_folium(m, width=1400, height=600)
 
 if __name__ == "__main__":
-    main()
+    try:
+        bq = get_bq_client()
+        main()
+    except Exception as e:
+        st.error("Failed to initialize application. Please check your credentials.")
+        st.stop()
