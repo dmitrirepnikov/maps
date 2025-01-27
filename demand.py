@@ -7,8 +7,7 @@ import pytz
 from datetime import datetime, timedelta
 import branca.colormap as cm
 import json
-from shapely import wkt
-from shapely.geometry import mapping
+import re
 
 # Page config
 st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
@@ -49,6 +48,18 @@ try:
 except Exception as e:
     st.error("Failed to initialize BigQuery client. Please check your credentials.")
     st.stop()
+
+def parse_wkt_polygon(wkt_string):
+    # Extract coordinates from WKT POLYGON string
+    coords_str = re.search(r'\(\((.*)\)\)', wkt_string).group(1)
+    coords_pairs = coords_str.split(',')
+    coordinates = []
+    
+    for pair in coords_pairs:
+        lon, lat = map(float, pair.strip().split())
+        coordinates.append([lat, lon])  # Folium expects [lat, lon]
+    
+    return coordinates
 
 @st.cache_data
 def fetch_data(hour):
@@ -164,24 +175,22 @@ def create_map(hour):
     for idx, row in data.iterrows():
         color = get_color(row['uber_eligible_offers'])
         
-        # Convert WKT to GeoJSON
-        shape = wkt.loads(row['square_geometry'])
-        geojson_geom = mapping(shape)
-        
-        folium.GeoJson(
-            data={
-                "type": "Feature",
-                "geometry": geojson_geom,
-                "properties": {}
-            },
-            style_function=lambda x, color=color: {
-                'fillColor': color,
-                'color': 'black',
-                'weight': 1,
-                'fillOpacity': 0.8
-            },
-            tooltip=f"Label: {row['label']}<br>Hour: {hour}:00<br>Eligible Offers: {row['uber_eligible_offers']:.2f}"
-        ).add_to(m)
+        try:
+            # Parse WKT polygon to coordinates
+            coordinates = parse_wkt_polygon(row['square_geometry'])
+            
+            # Create polygon
+            folium.Polygon(
+                locations=coordinates,
+                color='black',
+                weight=1,
+                fillColor=color,
+                fillOpacity=0.8,
+                tooltip=f"Label: {row['label']}<br>Hour: {hour}:00<br>Eligible Offers: {row['uber_eligible_offers']:.2f}"
+            ).add_to(m)
+        except Exception as e:
+            st.warning(f"Error plotting hotspot {row['label']}: {str(e)}")
+            continue
     
     # Add color scale
     colormap.add_to(m)
@@ -189,7 +198,7 @@ def create_map(hour):
     return m
 
 def main():
-    st.title("LA Hotspot Demand Map")
+    st.title("Hotspot Demand Map (for clusters with > 0 eligible orders")
     
     # Hour selector
     hour = st.slider(
