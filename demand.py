@@ -2,11 +2,10 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from google.cloud import bigquery
-from google.oauth2 import service_account
+from google.oauth2 import credentials
 import pytz
 from datetime import datetime, timedelta
 import branca.colormap as cm
-import json
 
 # Page config
 st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
@@ -16,16 +15,27 @@ st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
 def get_bq_client():
     try:
         # Get credentials from Streamlit secrets
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
+        credentials_dict = st.secrets["gcp_service_account"]
+        
+        # Create credentials object
+        credentials_obj = credentials.Credentials(
+            token=None,  # Token is handled by refresh
+            refresh_token=credentials_dict['refresh_token'],
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=credentials_dict['client_id'],
+            client_secret=credentials_dict['client_secret']
         )
         
         # Create BigQuery client
         client = bigquery.Client(
             project='postmates-x',
-            credentials=credentials
+            credentials=credentials_obj
         )
         return client
+    except KeyError as e:
+        st.error(f"Missing required credential field: {str(e)}")
+        st.error("Please ensure all required fields (refresh_token, client_id, client_secret) are present in secrets.")
+        raise
     except Exception as e:
         st.error(f"Error initializing BigQuery client: {str(e)}")
         st.error("Please ensure GCP credentials are properly configured in Streamlit secrets.")
