@@ -6,6 +6,9 @@ from google.oauth2 import credentials
 import pytz
 from datetime import datetime, timedelta
 import branca.colormap as cm
+import json
+from shapely import wkt
+from shapely.geometry import mapping
 
 # Page config
 st.set_page_config(page_title="Hotspot Demand Map", layout="wide")
@@ -161,8 +164,16 @@ def create_map(hour):
     for idx, row in data.iterrows():
         color = get_color(row['uber_eligible_offers'])
         
+        # Convert WKT to GeoJSON
+        shape = wkt.loads(row['square_geometry'])
+        geojson_geom = mapping(shape)
+        
         folium.GeoJson(
-            row['square_geometry'],
+            data={
+                "type": "Feature",
+                "geometry": geojson_geom,
+                "properties": {}
+            },
             style_function=lambda x, color=color: {
                 'fillColor': color,
                 'color': 'black',
