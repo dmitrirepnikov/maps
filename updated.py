@@ -220,25 +220,9 @@ def create_map(hour, day_offset):
     
     data['status'] = data.apply(get_status, axis=1)
 
-    # Calculate center coordinates with NaN handling
-    center_lat = data['latitude'].mean(skipna=True)
-    center_lon = data['longitude'].mean(skipna=True)
-    
-    # Additional check for valid center coordinates
-    if pd.isna(center_lat) or pd.isna(center_lon):
-        st.error("Unable to determine map center coordinates")
-        return None, None, refresh_time
-
-    # Create map with default center if needed
-    try:
-        m = folium.Map(location=[center_lat, center_lon],
-                      zoom_start=13,
-                      tiles='cartodbpositron')
-    except ValueError:
-        # Fallback to default LA coordinates if there's an error
-        m = folium.Map(location=[34.0522, -118.2437],  # LA coordinates
-                      zoom_start=13,
-                      tiles='cartodbpositron')
+    m = folium.Map(location=[34.0522, -118.2437],  # LA coordinates
+              zoom_start=13,
+              tiles='cartodbpositron')
 
     # Add hotspot squares with trend indicators
     for idx, row in data.iterrows():
