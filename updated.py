@@ -39,7 +39,7 @@ def get_square_bounds(lat, lon, side_length_meters):
         [lat + degree_delta, lon + degree_delta]
     ]
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def fetch_data(hour, day_offset):
     # Calculate the date based on the offset
     pst = pytz.timezone('America/Los_Angeles')
@@ -170,7 +170,7 @@ def fetch_data(hour, day_offset):
         data.loc[data['predicted_demand'] <= 0, 'predicted_demand'] = 0
     return data, refresh_time
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def fetch_previous_hour_data(hour, day_offset):
     prev_hour = hour - 1
     prev_day_offset = day_offset
@@ -182,6 +182,7 @@ def fetch_previous_hour_data(hour, day_offset):
     prev_data, _ = fetch_data(prev_hour, prev_day_offset)
     return prev_data
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def create_map(hour, day_offset):
     # Get data using cached function
     data, refresh_time = fetch_data(hour, day_offset)
@@ -192,31 +193,54 @@ def create_map(hour, day_offset):
         st.error("No data available for the selected time period")
         return None, None, refresh_time
     
-    # Color scheme
+    # Updated color scheme
     color_scheme = {
-        'High Demand No Supply': '#FF0000',  # Bright red
-        'Demand No Supply': '#ff4444',       # Lighter red
-        'Demand With Supply': '#44aa44',     # Green
-        'Supply No Demand': '#4444ff',       # Blue
-        'No Activity': '#888888'             # Gray
+        'Strong Demand With Supply': '#006400',  # Dark Green (>=5 demand, supply >= demand)
+        'Demand With Supply': '#44aa44',         # Green (1-5 demand, supply >= demand)
+        'Demand With Insufficient Supply': '#FFA500',  # Orange (>1 demand, 0<supply<demand)
+        'Weak Demand With Supply': '#FFFF00',    # Yellow (0.1<demand<=1, supply>0.5)
+        'High Demand No Supply': '#B30000',      # Bold Red (>=1 demand, no supply)
+        'Low Demand No Supply': '#FF6666',       # Light Red (0.1<demand<1, no supply)
+        'Supply No Demand': '#4444ff',           # Blue (<=0.1 demand, >0.2 supply)
+        'No Activity': '#888888'                 # Gray (all other cases)
     }
 
+    # Updated status function with new criteria
     def get_status(row):
         demand = row['predicted_demand']
         supply = row['net_supply_hours']
-        has_supply = supply > 0.1
         
-        if demand >= 2 and not has_supply:
-            return 'High Demand No Supply'
-        elif demand > 0 and not has_supply:
-            return 'Demand No Supply'
-        elif demand > 0 and has_supply:
-            if supply > 24:
-                st.warning(f"Warning: Unrealistic supply hours ({supply}) for hotspot {row['hotspot_label']}")
+        # Dark Green - Strong demand fully met
+        if demand >= 5 and supply >= demand:
+            return 'Strong Demand With Supply'
+        
+        # Green - Moderate to high demand fully met
+        elif 1 < demand < 5 and supply >= demand:
             return 'Demand With Supply'
-        elif has_supply and demand <= 0:
+        
+        # Orange - High demand with some but insufficient supply
+        elif demand > 1 and supply > 0 and supply < demand:
+            return 'Demand With Insufficient Supply'
+        
+        # Yellow - Weak demand with adequate supply
+        elif 0.1 < demand <= 1 and supply > 0.5:
+            return 'Weak Demand With Supply'
+        
+        # Bold Red - High demand with no supply
+        elif demand >= 1 and supply == 0:
+            return 'High Demand No Supply'
+            
+        # Light Red - Low to moderate demand with no supply
+        elif 0.1 < demand < 1 and supply == 0:
+            return 'Low Demand No Supply'
+        
+        # Blue - No demand but supply exists
+        elif demand <= 0.1 and supply > 0.2:
             return 'Supply No Demand'
-        return 'No Activity'
+        
+        # Gray - No significant activity
+        else:
+            return 'No Activity'
     
     data['status'] = data.apply(get_status, axis=1)
 
@@ -356,6 +380,79 @@ def main():
             <div class="legend-container">
                 {legend_items}
             </div>
+        """, unsafe_allow_html=True)
+        
+        # Add detailed criteria explanation below the legend
+        st.markdown("""
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #dee2e6;">
+            <h3 style="margin-bottom: 15px; color: #212529;">Color Coding Criteria:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="background-color: rgba(0, 100, 0, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #006400; font-weight: bold;">Dark Green - Strong Demand With Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand ≥ 5 AND supply hours ≥ demand value
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(68, 170, 68, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #44aa44; font-weight: bold;">Green - Demand With Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand between 1 and 5 AND supply hours ≥ demand value
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(255, 165, 0, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #FFA500; font-weight: bold;">Orange - Demand With Insufficient Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand > 1 AND supply hours > 0 but < demand value
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(255, 255, 0, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #CCCC00; font-weight: bold;">Yellow - Weak Demand With Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand between 0.1 and 1 AND supply hours > 0.5
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(179, 0, 0, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #B30000; font-weight: bold;">Bold Red - High Demand No Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand ≥ 1 AND supply hours = 0
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(255, 102, 102, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #FF6666; font-weight: bold;">Light Red - Low Demand No Supply:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand between 0.1 and 1 AND supply hours = 0
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(68, 68, 255, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #4444ff; font-weight: bold;">Blue - Supply No Demand:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        Predicted demand ≤ 0.1 AND supply hours > 0.2
+                    </td>
+                </tr>
+                <tr style="background-color: rgba(136, 136, 136, 0.1);">
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">
+                        <span style="color: #888888; font-weight: bold;">Gray - No Activity:</span>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; color: #000000;">
+                        No supply / No demand
+                    </td>
+                </tr>
+            </table>
+        </div>
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
